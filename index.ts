@@ -109,10 +109,18 @@ const svgo = new SVGO({
     ]
 })
 
-async function getSinglePath(data: string, file: string) {
+async function getSinglePath(data: string, file: string): Promise<{ d: string, name: string, viewBox: string }> {
     const result = await svgo.optimize(data, { path: file })
     // join paths manually, only return single path
-    return result.data.split(/(?:.*?)\<path d=\"(.*?)(?:\"\/\>)|(?:.*)/).join(" ").trim()
+    const d = result.data.split(/(?:.*?)\<path d=\"(.*?)(?:\"\/\>)|(?:.*)/).join(" ").trim()
+    const name = getName(file)
+    const viewBox = result.data.match(/(?:<svg.*?viewBox=\")(.*?)(?:\")/)[1]
+
+    return {
+        d,
+        name,
+        viewBox
+    }
 }
 
 function getName(fileName: string) {
@@ -122,7 +130,8 @@ function getName(fileName: string) {
 declare type SvgCodeJson = {
     svgCodes: Array<{
         name: string,
-        d: string
+        d: string,
+        viewBox: string
     }>
 }
 
@@ -137,10 +146,7 @@ async function parseAll() {
 
         const data = readFileSync(file, 'utf8')
         const result = await getSinglePath(data, file)
-        svgCodes.svgCodes.push({
-            name: getName(file),
-            d: result
-        })
+        svgCodes.svgCodes.push(result)
 
     }
 
