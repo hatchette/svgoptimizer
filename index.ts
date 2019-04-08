@@ -1,11 +1,13 @@
 
 import SVGO from 'svgo'
-import { readFile } from 'fs'
+import { readFileSync } from 'fs'
 import chalk from 'chalk'
 import { resolve } from 'path'
 import { sync } from 'glob'
 
 const svgo = new SVGO({
+    // @ts-ignore
+    multipass: 3,
     plugins: [
         {
             convertTransform: true,
@@ -14,6 +16,24 @@ const svgo = new SVGO({
             cleanupAttrs: true,
         }, {
             cleanupIDs: true,
+        },
+        { removeStyleElement: true }, 
+        { convertTransform: {
+            convertToShorts: true,
+            // degPrecision: 3, // transformPrecision (or matrix precision) - 2 by default
+            floatPrecision: 3,
+            transformPrecision: 5,
+            matrixToTransform: true,
+            shortTranslate: true,
+            shortScale: true,
+            shortRotate: true,
+            removeUseless: true,
+            collapseIntoOne: true,
+            leadingZero: true,
+            negativeExtraSpace: false
+        }},
+        {
+            removeAttrs: { attrs: '(stroke|fill|class|id|transform)' },
         },
         {
             removeDoctype: true,
@@ -28,8 +48,6 @@ const svgo = new SVGO({
         }, {
             removeDesc: true,
         }, {
-            removeUselessDefs: true,
-        }, {
             removeEditorsNSData: true,
         }, {
             removeEmptyAttrs: true,
@@ -39,8 +57,6 @@ const svgo = new SVGO({
             removeEmptyText: true,
         }, {
             removeEmptyContainers: true,
-        }, {
-            removeViewBox: false,
         }, {
             cleanupEnableBackground: true,
         }, {
@@ -67,47 +83,68 @@ const svgo = new SVGO({
             collapseGroups: true,
         }, {
             removeRasterImages: true,
+        },
+        { 
+            //@ts-ignore
+            reusePaths: true
         }, {
             convertShapeToPath: {
-                convertArcs: true,
-                convertTransform: true,
-                convertStyleToAttrs: true
+                convertArcs: true
             },
         }, {
-            mergePaths: true,
+            mergePaths: {
+                collapseRepeated: true,
+                leadingZero: false,
+                negativeExtraSpace: false
+            },
         },
         {
-            sortAttrs: true,
-        }, {
             removeDimensions: true,
-        }, {
-            removeAttrs: { attrs: '(stroke|fill|class)' },
-        }, {
+        },  {
             convertStyleToAttrs: true
         },
         {
-            convertTransform: true,
+            removeUselessDefs: true,
         },
     ]
 })
+
+async function getSinglePath(data: string, file: string) {
+    const result = await svgo.optimize(data, { path: file })
+    // join paths manually, only return single path
+    return result.data.split(/(?:.*?)\<path d=\"(.*?)(?:\"\/\>)|(?:.*)/).join(" ").trim()
+}
+
+function getName(fileName: string) {
+    return fileName.replace(/.*\/(.*?).svg/, "$1")
+}
+
+declare type SvgCodeJson = {
+    svgCodes: Array<{
+        name: string,
+        d: string
+    }>
+}
 
 async function parseAll() {
     const x = resolve(process.cwd(), './input/**.svg')
     const files = sync(x)
 
+    const svgCodes: SvgCodeJson = { svgCodes: [] }
+
     for (let i = 0; i < files.length; i++) {
         const file: string = files[i]
-        console.log(chalk.green(file))
 
-        readFile(file, 'utf8', async (err, data) => {
-            if (err) {
-                console.log(chalk.red(JSON.stringify(err)))
-            }
-            const result = await svgo.optimize(data, { path: file })
-            console.log(chalk.blueBright(result.data))
+        const data = readFileSync(file, 'utf8')
+        const result = await getSinglePath(data, file)
+        svgCodes.svgCodes.push({
+            name: getName(file),
+            d: result
         })
 
     }
+
+    console.log(chalk.yellow(JSON.stringify(svgCodes)))
 }
 
 parseAll()
